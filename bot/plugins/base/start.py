@@ -24,7 +24,7 @@ class FileSender:
         codex_message_ids: list[int],
         chat_id: int,
         from_chat_id: int,
-        protect_content: bool,  # noqa: FBT001
+        protect_content: bool,
     ) -> list[Message]:
         all_sent_files = []
 
@@ -35,9 +35,7 @@ class FileSender:
                 message_id=codex_message_ids[0],
                 protect_content=protect_content,
             )
-
             all_sent_files.append(send_files)
-
         else:
             codex_message_ids_chunk = [
                 codex_message_ids[i : i + FileSender.forward_limit_size]
@@ -56,41 +54,28 @@ class FileSender:
 
         return all_sent_files
 
-    @staticmethod
-    async def teleshare(
-        client: Client,
-        chat_id: int,
-        file_data: list[FileResolverModel],
-        file_origin: int,
-        protect_content: bool,  # noqa: FBT001
-    ) -> list[Message]:
-        all_sent_files = []
 
-        if len(file_data) == 1:
-            send_files = await Pyrotools.send_media(
-                client=client,
-                chat_id=chat_id,
-                file_data=file_data[0],
-                file_origin=file_origin,
-                protect_content=protect_content,
-            )
-            all_sent_files.append(send_files)
-        else:
-            file_data_chunk = [
-                file_data[i : i + FileSender.forward_limit_size]
-                for i in range(0, len(file_data), FileSender.forward_limit_size)
-            ]
+@Client.on_message(filters.command("ROOT_ADMINS_ID") & filters.user(config.OWNER_ID))
+async def add_root_admin(client: Client, message: Message):
+    """Add a new root admin via the command /ROOT_ADMINS_ID {user_id}"""
+    if len(message.command) != 2:
+        return await message.reply_text("Usage: /ROOT_ADMINS_ID {user_id}")
 
-            for i_file_data in file_data_chunk:
-                send_files = await Pyrotools.send_media_manager(
-                    client=client,
-                    chat_id=chat_id,
-                    file_data=i_file_data,
-                    file_origin=file_origin,
-                    protect_content=protect_content,
-                )
-                all_sent_files.extend(send_files) if isinstance(send_files, list) else all_sent_files.append(send_files)
-        return all_sent_files
+    try:
+        new_admin_id = int(message.command[1])
+    except ValueError:
+        return await message.reply_text("Invalid user ID. Please provide a numeric ID.")
+
+    await options.load_settings()
+    root_admins = options.settings.ROOT_ADMINS_ID
+
+    if new_admin_id in root_admins:
+        return await message.reply_text(f"User {new_admin_id} is already an admin.")
+
+    root_admins.append(new_admin_id)
+    await options.update_settings("ROOT_ADMINS_ID", root_admins)
+
+    await message.reply_text(f"User {new_admin_id} has been added as a root admin.")
 
 
 @Client.on_message(
@@ -98,23 +83,13 @@ class FileSender:
     group=0,
 )
 @RateLimiter.hybrid_limiter(func_count=1)
-async def file_start(
-    client: Client,
-    message: Message,
-) -> Message:
-    """
-    Handle start command, it returns files if a link is included otherwise sends the user a request.
-
-    **Usage:**
-        /start [optional file_link]
-    """
+async def file_start(client: Client, message: Message) -> Message:
+    """Handle start command, return files if a link is included, else sends a request."""
     if not message.command[1:]:
         await PyroHelper.option_message(client=client, message=message, option_key=options.settings.START_MESSAGE)
         return message.stop_propagation()
 
-    # shouldn't overwrite existing id it already exists
     await database.add_user(user_id=message.from_user.id)
-
     base64_file_link = message.text.split(maxsplit=1)[1]
     file_document = await database.get_link_document(base64_file_link=base64_file_link)
 
@@ -139,6 +114,7 @@ async def file_start(
             from_chat_id=config.BACKUP_CHANNEL,
             protect_content=config.PROTECT_CONTENT,
         )
+
         if not send_files:
             await PyroHelper.option_message(
                 client=client,
@@ -159,8 +135,8 @@ async def file_start(
         )
 
     delete_n_seconds = options.settings.AUTO_DELETE_SECONDS
-
     additional_message = None
+
     if options.settings.ADDITIONAL_MESSAGE != 0:
         additional_message = await PyroHelper.option_message(
             client=client,
@@ -170,7 +146,6 @@ async def file_start(
 
     if delete_n_seconds != 0:
         schedule_delete_message = [msg.id for msg in send_files]
-
         auto_delete_message = (
             options.settings.AUTO_DELETE_MESSAGE.format(int(delete_n_seconds / 60))
             if not isinstance(options.settings.AUTO_DELETE_MESSAGE, int)
@@ -198,14 +173,8 @@ async def file_start(
 
 @Client.on_message(filters.command("start") & filters.private, group=69)
 @RateLimiter.hybrid_limiter(func_count=1)
-async def return_start(
-    client: Client,
-    message: SubscriptionMessage,
-) -> Message | None:
-    """
-    Handle start command without files or not subscribed.
-    """
-
+async def return_start(client: Client, message: SubscriptionMessage) -> Message | None:
+    """Handle start command without files or not subscribed."""
     if hasattr(message, "user_is_banned") and message.user_is_banned:
         return await PyroHelper.option_message(
             client=client,
