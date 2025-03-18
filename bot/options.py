@@ -35,6 +35,7 @@ class SettingsModel(BaseModel):
     GLOBAL_MODE: bool = False
     BACKUP_FILES: bool = True
 
+    ROOT_ADMINS_ID: bool = False
 
 class InvalidValueError(Exception):
     """
