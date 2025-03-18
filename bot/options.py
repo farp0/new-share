@@ -35,7 +35,7 @@ class SettingsModel(BaseModel):
     GLOBAL_MODE: bool = False
     BACKUP_FILES: bool = True
 
-    ROOT_ADMINS_ID: str | int = 0
+    ROOT_ADMINS_ID: list[int] = []
 
 class InvalidValueError(Exception):
     """
